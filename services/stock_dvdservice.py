@@ -18,7 +18,7 @@ def process_sync_dividend():
         if not rows:
             return {"status": "success", "message": "조회된 법인 데이터가 없습니다.", "count": 0}
 
-        str_dvd_url_parent = f"{URL}{DVD_URL}{service_key}"
+        str_dvd_url_parent = f"{URL}{DVD_URL}&serviceKey={service_key}"
         headers = {
             "user-agent": "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; .NET CLR 1.0.3705;)"
         }
