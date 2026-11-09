@@ -3,7 +3,7 @@ name: Trigger Dividend Sync Batch
 on:
   schedule:
     # UTC 01시(10시 KST), 05시(14시 KST), 09시(18시 KST)에 실행
-    - cron: '0 1,5,9 * * *'
+    - cron: '0 1,5,9 * * *' # Runs at 01:00, 05:00 and 09:00
   # GitHub 화면(Actions 탭)에서 직접 수동 실행하고 싶을 때 사용
   workflow_dispatch:
 
