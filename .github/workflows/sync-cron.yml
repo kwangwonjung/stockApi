@@ -4,8 +4,7 @@ name: Trigger Dividend Sync Batch
 on:
   schedule:
     # 한국 시간 기준 매일 10:17, 14:17, 18:17 실행
-    - cron: '17 10,14,18 * * *'
-      timezone: 'Asia/Seoul'
+    - cron: '17 1,4,9 * * *'
 
   # GitHub Actions 화면에서 수동 실행 가능
   workflow_dispatch:
