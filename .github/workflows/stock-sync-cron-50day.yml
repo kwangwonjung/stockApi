@@ -1,0 +1,19 @@
+name: Trigger Stock 50 Day Data Sync Batch
+
+on:
+  schedule:
+    # -9시로 계산
+    - cron: '40 15,17,19 * * *'
+  workflow_dispatch:
+
+jobs:
+  call-stock-sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send POST Request to Stock Day Data API
+        run: |
+          curl --fail-with-body --show-error --silent \
+            --max-time 120 \
+            -X POST \
+            https://musicholicstockapi.vercel.app/api/batchs/sync-stock-50day
