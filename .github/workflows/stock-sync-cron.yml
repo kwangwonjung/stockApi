@@ -16,4 +16,4 @@ jobs:
           curl --fail-with-body --show-error --silent \
             --max-time 120 \
             -X POST \
-            https://musicholicstockapi.vercel.app/api/batchs/sync-stockday 
+            https://musicholicstockapi.vercel.app/api/batchs/sync-stockmonth 

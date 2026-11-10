@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from services.stock_dvdservice import process_sync_dividend
 
 # 주식 일별 데이터 서비스 임포트
-from services.stock_service import process_stock_day_data
+from services.stock_service import process_stock_month_data
 
 router = APIRouter()
 
@@ -27,8 +27,8 @@ def sync_dividend():
 
 
 # 2. 주식 일별 데이터 자동 동기화 (POST)
-@router.post("/sync-stockday", summary="주식 일별 데이터 자동 동기화")
-def sync_stock_day_data(request: StockDayDataRequest = StockDayDataRequest()):
+@router.post("/sync-stockmonth", summary="주식 일별 데이터 자동 동기화")
+def sync_stock_month_data(request: StockDayDataRequest = StockDayDataRequest()):
   """이번 달 기준으로 10개월 전 1일자와 저번 달(전월) 날짜를 자동으로 계산하여
 
   주식 일별 데이터를 수집하고 Supabase에 업서트합니다.
@@ -45,7 +45,7 @@ def sync_stock_day_data(request: StockDayDataRequest = StockDayDataRequest()):
     strStartDate = start_target_date.strftime("%Y/%m")  # 예: '2026/01'
 
     # 비즈니스 로직 함수 호출
-    result = process_stock_day_data(
+    result = process_stock_month_data(
         dtStockStartBaseDt_text=strStartDate,
         dtStockEndBaseDt_value=prev_month_date,
         bstockSum=request.stock_sum,
