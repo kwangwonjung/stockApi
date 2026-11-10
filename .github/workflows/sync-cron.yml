@@ -1,16 +1,39 @@
+
 name: Trigger Dividend Sync Batch
 
 on:
   schedule:
-    # UTC 01시(10시 KST), 05시(14시 KST), 09시(18시 KST)에 실행
-    - cron: '0 1,5,9 * * *' # Runs at 01:00, 05:00 and 09:00
-  # GitHub 화면(Actions 탭)에서 직접 수동 실행하고 싶을 때 사용
+    # 한국 시간 기준 매일 10:17, 14:17, 18:17 실행
+    - cron: '17 10,14,18 * * *'
+      timezone: 'Asia/Seoul'
+
+  # GitHub Actions 화면에서 수동 실행 가능
   workflow_dispatch:
 
 jobs:
   call-sync-api:
     runs-on: ubuntu-latest
+
     steps:
+      # 실행 시간 확인
+      - name: Check Execution Time
+        run: |
+          echo "================================"
+          echo "UTC Time:"
+          date -u '+%Y-%m-%d %H:%M:%S'
+
+          echo "KST Time:"
+          TZ=Asia/Seoul date '+%Y-%m-%d %H:%M:%S'
+
+          echo "Event: ${{ github.event_name }}"
+          echo "Schedule: ${{ github.event.schedule }}"
+          echo "Run ID: ${{ github.run_id }}"
+          echo "================================"
+
+      # 배당 데이터 동기화 API 호출
       - name: Send POST Request to Vercel API
         run: |
-          curl -X POST https://musicholicstockapi.vercel.app/api/batchs/sync-dividend
+          curl --fail-with-body --show-error --silent \
+            --max-time 120 \
+            -X POST \
+            https://musicholicstockapi.vercel.app/api/batchs/sync-dividend
