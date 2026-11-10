@@ -49,6 +49,50 @@ def process_stock_month_data(
   except Exception as e:
     return {"status": "error", "message": str(e)}
 
+def process_stock_50day_data(bstockSum=True):
+    """
+    C의 setStockToDayCreate 로직을 반영한 파라미터 없는 일별 데이터 수집 함수
+    명칭: process_stock_50day_data
+    """
+    try:
+        # 1. C#의 DbConnection.QueryForDataSet("UP_STOCK_MT_SELECT", ht) 대응
+        # Supabase RPC 또는 테이블 조회 (프로젝트 환경에 맞는 함수명으로 연동)
+        params = {"p_stock_name": ""}
+        response = supabase.rpc("stock_mt_day_select", params).execute()
+        rows = response.data
+
+        if not rows:
+            return {
+                "status": "success",
+                "message": "조회된 주식 데이터가 없습니다.",
+                "processed_count": 0
+            }
+
+        # 2. 날짜 및 조건 세팅 (C# 코드 로직 반영)
+        # 예: 첫 번째 행에서 시작일 가져오기 (데이터 구조에 따라 키값 확인 필요)
+        strStartDate = str(rows[0].get("yyyymmdd", ""))
+        
+        # 오늘 날짜를 YYYYMMDD 형태로 생성
+        strEndDate = datetime.today().strftime("%Y%m%d")
+        strEndDate2 = "TODAY"
+
+        # API 요청 시그니처에 맞게 beginBasDt / endBasDt 구성 (필요에 따라 가공)
+        beginBasDt = strStartDate
+        endBasDt = strEndDate
+
+        # 3. 기존 set_day_data 함수 호출
+        result = set_day_data(
+            rows=rows, 
+            beginBasDt=beginBasDt, 
+            endBasDt=endBasDt, 
+            strEndDate2=strEndDate2, 
+            bstockSum=bstockSum
+        )
+
+        return result
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 def set_day_data(rows, beginBasDt, endBasDt, strEndDate2, bstockSum):
   """C#의 setDayData 메서드 구조를 반영한 데이터 처리 및 업서트 함수"""
