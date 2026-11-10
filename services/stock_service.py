@@ -14,7 +14,7 @@ load_dotenv()
 service_key = os.getenv("SERVICE_KEY", "")
 
 
-def process_stock_day_data(
+def process_stock_month_data(
     dtStockStartBaseDt_text, dtStockEndBaseDt_value, bstockSum=True
 ):
   """주식 일별 데이터를 수집하고 Supabase에 업서트하는 메인 함수"""
