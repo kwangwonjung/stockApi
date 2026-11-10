@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.endpoints import batch # 방금 만든 주식 라우터 임포트
+from api.endpoints import batch
 
 app = FastAPI()
 
