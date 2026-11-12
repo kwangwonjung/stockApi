@@ -1,4 +1,6 @@
-from datetime import datetime
+
+from datetime import datetime, timedelta, timezone
+from dateutil.relativedelta import relativedelta
 import json
 import os
 from core.config import ETF_URL, INDEX_URL, STOCK_URL, URL
@@ -86,6 +88,38 @@ def process_stock_50day_data():
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+def process_stock_day_data():
+    
+    try:
+        # 1. C#의 DbConnection.QueryForDataSet("UP_STOCK_MT_SELECT", ht) 대응
+        # Supabase RPC 또는 테이블 조회 (프로젝트 환경에 맞는 함수명으로 연동)
+        params = {"p_stock_name": ""}
+        response = supabase.rpc("stock_mt_day_select", params).execute()
+        rows = response.data
+
+        if not rows:
+            return {
+                "status": "success",
+                "message": "조회된 주식 데이터가 없습니다.",
+                "processed_count": 0
+            }
+
+        kst = timezone(timedelta(hours=9))
+        today = datetime.now(kst)
+
+        beginBasDt = (today - timedelta(days=7)).strftime("%Y%m%d")  # 일주일 전 일자 (예: 20261105)
+        endBasDt = (today - timedelta(days=1)).strftime("%Y%m%d")    # 어제 일자 (예: 20261111)
+        
+        result = set_day_data(rows = rows
+                              , beginBasDt = beginBasDt
+                              , endBasDt = endBasDt) 
+        
+        return result
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 
 def set_day_data(rows, beginBasDt, endBasDt):
   """C#의 setDayData 메서드 구조를 반영한 일별 데이터 처리 및 업서트 함수"""

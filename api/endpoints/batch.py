@@ -9,6 +9,8 @@ from services.stock_dvdservice import process_sync_dividend
 # 주식 일별 데이터 서비스 임포트
 from services.stock_service import set_stock_sum_data
 from services.stock_service import process_stock_50day_data
+from services.stock_service import process_stock_day_data
+
 
 router = APIRouter()
 
@@ -65,9 +67,16 @@ def sync_stock_sum_data(request: StockDayDataRequest = StockDayDataRequest()):
   except Exception as e:
     raise HTTPException(status_code=500, detail=f"서버 내부 오류: {str(e)}")
 
-@router.post("/sync-stock-50day", summary="50일/일별 데이터 수동 동기화")
+@router.post("/sync-stock-50day", summary="50일합계 데이터 수동 동기화")
 def sync_stock_50day():
     result = process_stock_50day_data()
+    if result.get("status") == "error":
+        raise HTTPException(status_code=500, detail=result.get("message"))
+    return result
+
+@router.post("/sync-stock-day", summary="일별 데이터 수동 동기화")
+def sync_stock_day_data():
+    result = process_stock_day_data()
     if result.get("status") == "error":
         raise HTTPException(status_code=500, detail=result.get("message"))
     return result
