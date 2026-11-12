@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from services.stock_dvdservice import process_sync_dividend
 
 # 주식 일별 데이터 서비스 임포트
-from services.stock_service import process_stock_month_data
+from services.stock_service import set_stock_sum_data
 from services.stock_service import process_stock_50day_data
 
 router = APIRouter()
@@ -28,28 +28,27 @@ def sync_dividend():
 
 
 # 2. 주식 일별 데이터 자동 동기화 (POST)
-@router.post("/sync-stockmonth", summary="주식 일별 데이터 자동 동기화")
-def sync_stock_month_data(request: StockDayDataRequest = StockDayDataRequest()):
+@router.post("/sync-stocksum", summary="주식 일별 데이터 자동 동기화")
+def sync_stock_sum_data(request: StockDayDataRequest = StockDayDataRequest()):
   """이번 달 기준으로 10개월 전 1일자와 저번 달(전월) 날짜를 자동으로 계산하여
 
   주식 일별 데이터를 수집하고 Supabase에 업서트합니다.
   """
   try:
     now = datetime.now()
-
-    # 1. 저번 달(전월) 구하기 (예: 11월 기준 -> 10월)
-    prev_month_date = now - relativedelta(months=1)
-    strEndDate2 = prev_month_date.strftime("%Y%m")  # 예: '202610'
+    gubn = ''
+    strEndDate = now.strftime("%Y%m")  + "01" # 예: '202610'
 
     # 2. 이번 달 기준으로 10개월 전의 1일 구하기 (예: 11월 기준 -> 올해 1월)
     start_target_date = now - relativedelta(months=10)
     strStartDate = start_target_date.strftime("%Y/%m")  # 예: '2026/01'
-
+    strStartDate = strStartDate.replace("/", "") + "01"
+    
     # 비즈니스 로직 함수 호출
-    result = process_stock_month_data(
-        dtStockStartBaseDt_text=strStartDate,
-        dtStockEndBaseDt_value=prev_month_date,
-        bstockSum=request.stock_sum,
+    result = set_stock_sum_data(
+        gubn =gubn,
+        beginBasDt=strStartDate,
+        strEndDate=strEndDate,
     )
 
     if result.get("status") == "error":
@@ -58,7 +57,7 @@ def sync_stock_month_data(request: StockDayDataRequest = StockDayDataRequest()):
     return {
         "calculated_range": {
             "start_date": strStartDate,
-            "end_date": strEndDate2,
+            "end_date": strEndDate,
         },
         **result,
     }
@@ -68,7 +67,7 @@ def sync_stock_month_data(request: StockDayDataRequest = StockDayDataRequest()):
 
 @router.post("/sync-stock-50day", summary="50일/일별 데이터 수동 동기화")
 def sync_stock_50day():
-    result = process_stock_50day_data(bstockSum=True)
+    result = process_stock_50day_data()
     if result.get("status") == "error":
         raise HTTPException(status_code=500, detail=result.get("message"))
     return result

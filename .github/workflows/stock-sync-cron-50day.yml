@@ -3,7 +3,7 @@ name: Trigger Stock 50 Day Data Sync Batch
 on:
   schedule:
     # -9시로 계산
-    - cron: '40 15,17,19 * * *'
+    - cron: '40 16,17,18 * * *'
   workflow_dispatch:
 
 jobs:

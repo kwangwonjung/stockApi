@@ -49,7 +49,7 @@ def process_stock_month_data(
   except Exception as e:
     return {"status": "error", "message": str(e)}
 
-def process_stock_50day_data(bstockSum=True):
+def process_stock_50day_data():
     """
     C의 setStockToDayCreate 로직을 반영한 파라미터 없는 일별 데이터 수집 함수
     명칭: process_stock_50day_data
@@ -73,20 +73,13 @@ def process_stock_50day_data(bstockSum=True):
         strStartDate = str(rows[0].get("yyyymmdd", ""))
         
         # 오늘 날짜를 YYYYMMDD 형태로 생성
-        strEndDate = datetime.today().strftime("%Y%m%d")
-        strEndDate2 = "TODAY"
-
-        # API 요청 시그니처에 맞게 beginBasDt / endBasDt 구성 (필요에 따라 가공)
-        beginBasDt = strStartDate
-        endBasDt = strEndDate
-
+        strEndDate = "TODAY"
+        gubn ="TODAY"
         # 3. 기존 set_day_data 함수 호출
-        result = set_day_data(
-            rows=rows, 
-            beginBasDt=beginBasDt, 
-            endBasDt=endBasDt, 
-            strEndDate2=strEndDate2, 
-            bstockSum=bstockSum
+        result = set_stock_sum_data(
+            gubn =gubn,
+            beginBasDt=strStartDate,
+            strEndDate=strEndDate,
         )
 
         return result
@@ -94,8 +87,8 @@ def process_stock_50day_data(bstockSum=True):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-def set_day_data(rows, beginBasDt, endBasDt, strEndDate2, bstockSum):
-  """C#의 setDayData 메서드 구조를 반영한 데이터 처리 및 업서트 함수"""
+def set_day_data(rows, beginBasDt, endBasDt):
+  """C#의 setDayData 메서드 구조를 반영한 일별 데이터 처리 및 업서트 함수"""
 
   headers = {
       "user-agent": (
@@ -187,29 +180,37 @@ def set_day_data(rows, beginBasDt, endBasDt, strEndDate2, bstockSum):
             "p_close_price": str(o.get("clpr", "")),
         }
         supabase.rpc("stock_upsert", iht).execute()
-        
 
-      # 요약 데이터 업서트 (bstockSum이 True인 경우)
-      if bstockSum:
-        is_today = strEndDate2.upper() == "TODAY"
-        ht2 = {
-            "p_stock_code": strStockCode,
-            "p_from_yyyymmdd": beginBasDt,
-            "p_to_yyyymmdd": strEndDate2,
-            "p_gubn": "TODAY" if is_today else "",
-        }
-        supabase.rpc("stock_sum_upsert", ht2).execute()
-        success_count += 1
+      success_count += 1
 
     except Exception as e:
-      # 💡 특정 종목 처리 중 에러 발생 시 어떤 종목에서 문제가 생겼는지 터미널에 명확히 출력
       print(
-          f"❌ [에러 발생 종목] 종목코드: {strStockCode} | 에러 내용: {str(e)}"
+          f"❌ [에러 발생 종목 - 일별 데이터] 종목코드: {strStockCode} | 에러 내용:"
+          f" {str(e)}"
       )
       continue
 
   return {
       "status": "success",
-      "message": "생성되었습니다.",
+      "message": "일별 데이터가 생성되었습니다.",
       "processed_count": success_count,
   }
+
+def set_stock_sum_data(gubn, beginBasDt, strEndDate):
+  """요약 데이터 처리 및 업서트 함수"""
+  try:
+    ht2 = {
+        "p_gubn": gubn,
+        "p_from_yyyymmdd": beginBasDt,
+        "p_to_yyyymmdd": strEndDate,
+    }
+    supabase.rpc("stock_sum_upsert_all", ht2).execute()
+
+    return {
+        "status": "success",
+        "message": "요약 데이터가 생성되었습니다.",
+    }
+
+  except Exception as e:
+    print(f"❌ [에러 발생 - 요약 데이터] 에러 내용: {str(e)}")
+    return {"status": "error", "message": str(e)}
