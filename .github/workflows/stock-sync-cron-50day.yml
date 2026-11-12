@@ -1,4 +1,4 @@
-name: Trigger Stock 50 Day Data Sync Batch
+name: Trigger Stock 50 Day Data Sum Batch
 
 on:
   schedule:

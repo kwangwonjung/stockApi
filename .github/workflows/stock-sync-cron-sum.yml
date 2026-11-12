@@ -1,4 +1,4 @@
-name: Trigger Stock 10Month Data Sync Batch
+name: Trigger Stock 10Month Data Sum Batch
 
 on:
   schedule:
