@@ -1,15 +1,14 @@
-
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
-from dateutil.relativedelta import relativedelta
-import json
 import os
+import time
 from core.config import ETF_URL, INDEX_URL, STOCK_URL, URL
 from core.database import supabase
 from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
+import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import requests
 
 load_dotenv()
 
@@ -21,7 +20,6 @@ def process_stock_month_data(
 ):
   """주식 일별 데이터를 수집하고 Supabase에 업서트하는 메인 함수"""
   try:
-    # 1. 대상 주식/종목 목록 조회 (Supabase RPC 호출)
     params = {"p_stock_name": ""}
     response = supabase.rpc("stock_mt_std_select", params).execute()
     rows = response.data
@@ -33,96 +31,160 @@ def process_stock_month_data(
           "count": 0,
       }
 
-    # 2. 날짜 계산
     strStartDate = dtStockStartBaseDt_text.replace("/", "") + "01"
-
     end_date_plus_1 = dtStockEndBaseDt_value + relativedelta(months=1)
     strEndDate = end_date_plus_1.strftime("%Y%m") + "01"
-
     strEndDate2 = dtStockEndBaseDt_value.strftime("%Y%m")
 
-    # 3. set_day_data 함수 호출 (C#의 setDayData 역할)
     result = set_day_data(
         rows, strStartDate, strEndDate, strEndDate2, bstockSum
     )
-
     return result
 
   except Exception as e:
     return {"status": "error", "message": str(e)}
 
+
 def process_stock_50day_data():
-    """
+  """
     C의 setStockToDayCreate 로직을 반영한 파라미터 없는 일별 데이터 수집 함수
     명칭: process_stock_50day_data
     """
-    try:
-        # 1. C#의 DbConnection.QueryForDataSet("UP_STOCK_MT_SELECT", ht) 대응
-        # Supabase RPC 또는 테이블 조회 (프로젝트 환경에 맞는 함수명으로 연동)
-        params = {"p_stock_name": ""}
-        response = supabase.rpc("stock_mt_day_select", params).execute()
-        rows = response.data
+  try:
+    params = {"p_stock_name": ""}
+    response = supabase.rpc("stock_mt_day_select", params).execute()
+    rows = response.data
 
-        if not rows:
-            return {
-                "status": "success",
-                "message": "조회된 주식 데이터가 없습니다.",
-                "processed_count": 0
-            }
+    if not rows:
+      return {
+          "status": "success",
+          "message": "조회된 주식 데이터가 없습니다.",
+          "processed_count": 0,
+      }
 
-        # 2. 날짜 및 조건 세팅 (C# 코드 로직 반영)
-        # 예: 첫 번째 행에서 시작일 가져오기 (데이터 구조에 따라 키값 확인 필요)
-        strStartDate = str(rows[0].get("yyyymmdd", ""))
-        
-        # 오늘 날짜를 YYYYMMDD 형태로 생성
-        strEndDate = "TODAY"
-        gubn ="TODAY"
-        # 3. 기존 set_day_data 함수 호출
-        result = set_stock_sum_data(
-            gubn =gubn,
-            beginBasDt=strStartDate,
-            strEndDate=strEndDate,
-        )
+    strStartDate = str(rows[0].get("yyyymmdd", ""))
+    strEndDate = "TODAY"
+    gubn = "TODAY"
 
-        return result
+    result = set_stock_sum_data(
+        gubn=gubn,
+        beginBasDt=strStartDate,
+        strEndDate=strEndDate,
+    )
+    return result
 
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+  except Exception as e:
+    return {"status": "error", "message": str(e)}
+
 
 def process_stock_day_data():
-    
-    try:
-        # 1. C#의 DbConnection.QueryForDataSet("UP_STOCK_MT_SELECT", ht) 대응
-        # Supabase RPC 또는 테이블 조회 (프로젝트 환경에 맞는 함수명으로 연동)
-        params = {"p_stock_name": ""}
-        response = supabase.rpc("stock_mt_day_select", params).execute()
-        rows = response.data
+  try:
+    params = {"p_stock_name": ""}
+    response = supabase.rpc("stock_mt_day_select", params).execute()
+    rows = response.data
 
-        if not rows:
-            return {
-                "status": "success",
-                "message": "조회된 주식 데이터가 없습니다.",
-                "processed_count": 0
-            }
+    if not rows:
+      return {
+          "status": "success",
+          "message": "조회된 주식 데이터가 없습니다.",
+          "processed_count": 0,
+      }
 
-        kst = timezone(timedelta(hours=9))
-        today = datetime.now(kst)
+    kst = timezone(timedelta(hours=9))
+    today = datetime.now(kst)
 
-        beginBasDt = (today - timedelta(days=7)).strftime("%Y%m%d")  # 일주일 전 일자 (예: 20261105)
-        endBasDt = (today - timedelta(days=1)).strftime("%Y%m%d")    # 어제 일자 (예: 20261111)
-        
-        result = set_day_data(rows = rows
-                              , beginBasDt = beginBasDt
-                              , endBasDt = endBasDt) 
-        
-        return result
+    beginBasDt = (today - timedelta(days=7)).strftime("%Y%m%d")
+    endBasDt = (today - timedelta(days=1)).strftime("%Y%m%d")
 
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    result = set_day_data(rows=rows, beginBasDt=beginBasDt, endBasDt=endBasDt)
+    return result
+
+  except Exception as e:
+    return {"status": "error", "message": str(e)}
+
+
+def _fetch_single_stock_items(session, headers, dr, beginBasDt, endBasDt):
+  """단일 종목의 API 데이터를 호출하여 업서트할 데이터 리스트를 반환하는 내부 워커 함수"""
+  strStockCode = str(dr.get("stock_code", ""))
+  stockGubn = str(dr.get("stock_gubn", ""))
+  upsert_items = []
+
+  try:
+    if strStockCode == "KOSPI":
+      likeSrtnCd = "&idxNm=코스피&numOfRows=10000"
+      targetURL = (
+          URL
+          + "service/"
+          + INDEX_URL
+          + "&serviceKey="
+          + service_key
+          + f"&beginBasDt={beginBasDt}&endBasDt={endBasDt}"
+          + likeSrtnCd
+      )
+    elif stockGubn == "ETF":
+      likeSrtnCd = f"&likeSrtnCd={strStockCode}&numOfRows=10000"
+      targetURL = (
+          URL
+          + "service/"
+          + ETF_URL
+          + "&serviceKey="
+          + service_key
+          + f"&beginBasDt={beginBasDt}&endBasDt={endBasDt}"
+          + likeSrtnCd
+      )
+    else:
+      likeSrtnCd = f"&likeSrtnCd={strStockCode}&numOfRows=10000"
+      targetURL = (
+          URL
+          + "service/"
+          + STOCK_URL
+          + "&serviceKey="
+          + service_key
+          + f"&beginBasDt={beginBasDt}&endBasDt={endBasDt}"
+          + likeSrtnCd
+      )
+
+    # 요청 간 미세 딜레이를 주어 429(초당 호출 제한) 방지
+    time.sleep(0.15)
+    res = session.get(targetURL, headers=headers, timeout=(15, 45))
+
+    if res.status_code != 200:
+      print(
+          f"⚠️ [API 응답 에러] 종목코드: {strStockCode} | 상태코드:"
+          f" {res.status_code}"
+      )
+      return strStockCode, False, upsert_items
+
+    r = res.json()
+    item_list = (
+        r.get("response", {}).get("body", {}).get("items", {}).get("item")
+    )
+
+    if not item_list:
+      return strStockCode, False, upsert_items
+
+    if isinstance(item_list, dict):
+      item_list = [item_list]
+
+    for o in item_list:
+      upsert_items.append({
+          "p_stock_code": strStockCode,
+          "p_yyyymmdd": str(o.get("basDt", "")),
+          "p_close_price": str(o.get("clpr", "")),
+      })
+
+    return strStockCode, True, upsert_items
+
+  except Exception as e:
+    print(
+        f"❌ [에러 발생 종목 - 일별 데이터] 종목코드: {strStockCode} | 에러 내용:"
+        f" {str(e)}"
+    )
+    return strStockCode, False, upsert_items
 
 
 def set_day_data(rows, beginBasDt, endBasDt):
-  """C#의 setDayData 메서드 구조를 반영한 일별 데이터 처리 및 업서트 함수"""
+  """공공데이터 TPS 제한(429) 및 윈도우 소켓 충돌(10035)을 방지하면서 속도를 개선한 함수"""
 
   headers = {
       "user-agent": (
@@ -131,104 +193,48 @@ def set_day_data(rows, beginBasDt, endBasDt):
       )
   }
 
-  # 네트워크 불안정 및 타임아웃 대응을 위한 세션 및 자동 재시도 설정
+  # 429(Too Many Requests) 발생 시 자동으로 잠시 대기 후 재시도하도록 설정
   session = requests.Session()
   retries = Retry(
-      total=3,
-      backoff_factor=1,
-      status_forcelist=[500, 502, 503, 504],
+      total=5,
+      backoff_factor=1.0,
+      status_forcelist=[429, 500, 502, 503, 504],
   )
-  session.mount("https://", HTTPAdapter(max_retries=retries))
+  adapter = HTTPAdapter(max_retries=retries, pool_connections=5, pool_maxsize=5)
+  session.mount("https://", adapter)
 
   success_count = 0
+  all_upsert_list = []
 
-  # 각 종목별 데이터 순회 및 처리
-  for dr in rows:
-    strStockCode = str(dr.get("stock_code", ""))
-    stockGubn = str(dr.get("stock_gubn", ""))
+  # 1단계: 공공데이터 API 트래픽 제한을 넘지 않도록 동시 요청을 3개로 제한
+  with ThreadPoolExecutor(max_workers=3) as api_executor:
+    futures = [
+        api_executor.submit(
+            _fetch_single_stock_items, session, headers, dr, beginBasDt, endBasDt
+        )
+        for dr in rows
+    ]
 
+    for future in as_completed(futures):
+      _, is_success, items = future.result()
+      if is_success:
+        success_count += 1
+        all_upsert_list.extend(items)
+
+  # 2단계: 윈도우 소켓 충돌(WinError 10035) 방지를 위해 DB 업서트는 단일 스레드로 순차 실행
+  # (API 호출이 병렬로 끝났기 때문에 DB 저장만 순차로 해도 전체 시간은 매우 짧습니다)
+  for iht in all_upsert_list:
     try:
-      targetURL = ""
-      likeSrtnCd = ""
-
-      # URL 조건 분기
-      if strStockCode == "KOSPI":
-        likeSrtnCd = "&idxNm=코스피&numOfRows=10000"
-        targetURL = (
-            URL
-            + "service/"
-            + INDEX_URL
-            + "&serviceKey="
-            + service_key
-            + f"&beginBasDt={beginBasDt}&endBasDt={endBasDt}"
-            + likeSrtnCd
-        )
-      elif stockGubn == "ETF":
-        likeSrtnCd = f"&likeSrtnCd={strStockCode}&numOfRows=10000"
-        targetURL = (
-            URL
-            + "service/"
-            + ETF_URL
-            + "&serviceKey="
-            + service_key
-            + f"&beginBasDt={beginBasDt}&endBasDt={endBasDt}"
-            + likeSrtnCd
-        )
-      else:
-        likeSrtnCd = f"&likeSrtnCd={strStockCode}&numOfRows=10000"
-        targetURL = (
-            URL
-            + "service/"
-            + STOCK_URL
-            + "&serviceKey="
-            + service_key
-            + f"&beginBasDt={beginBasDt}&endBasDt={endBasDt}"
-            + likeSrtnCd
-        )
-
-      # API 요청
-      res = session.get(targetURL, headers=headers, timeout=(20, 60))
-      if res.status_code != 200:
-        print(
-            f"⚠️ [API 응답 에러] 종목코드: {strStockCode} | 상태코드:"
-            f" {res.status_code}"
-        )
-        continue
-
-      r = res.json()
-      item_list = (
-          r.get("response", {}).get("body", {}).get("items", {}).get("item")
-      )
-
-      if not item_list:
-        continue
-
-      if isinstance(item_list, dict):
-        item_list = [item_list]
-
-      # 일별 데이터 업서트
-      for o in item_list:
-        iht = {
-            "p_stock_code": strStockCode,
-            "p_yyyymmdd": str(o.get("basDt", "")),
-            "p_close_price": str(o.get("clpr", "")),
-        }
-        supabase.rpc("stock_upsert", iht).execute()
-
-      success_count += 1
-
+      supabase.rpc("stock_upsert", iht).execute()
     except Exception as e:
-      print(
-          f"❌ [에러 발생 종목 - 일별 데이터] 종목코드: {strStockCode} | 에러 내용:"
-          f" {str(e)}"
-      )
-      continue
+      print(f"❌ [DB 업서트 에러]: {str(e)}")
 
   return {
       "status": "success",
       "message": "일별 데이터가 생성되었습니다.",
       "processed_count": success_count,
   }
+
 
 def set_stock_sum_data(gubn, beginBasDt, strEndDate):
   """요약 데이터 처리 및 업서트 함수"""
